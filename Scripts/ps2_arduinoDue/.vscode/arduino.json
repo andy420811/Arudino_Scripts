@@ -1,0 +1,7 @@
+{
+    "board": "arduino:megaavr:nona4809",
+    "sketch": "ps2_arduinoDue.ino",
+    "port": "COM5",
+    "programmer": "Arduino Gemma",
+    "configuration": "mode=off"
+}
