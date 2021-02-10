@@ -3,5 +3,7 @@
         "chrono": "cpp",
         "cmath": "cpp",
         "cstdlib": "cpp"
-    }
+    },
+    "arduino.defaultBaudRate": 9600,
+    "arduino.path": "C:\\Program Files (x86)\\Arduino"
 }

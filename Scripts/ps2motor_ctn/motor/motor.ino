@@ -5,8 +5,8 @@
 
 #define motorA_DIRC_PIN 8
 #define motorA_PWM_PIN 9
-#define motorB_DIRC_PIN 7
-#define motorB_PWM_PIN 6
+#define motorB_DIRC_PIN 10
+#define motorB_PWM_PIN 7
 #define servoA_PWM_PIN 3
 #define servoB_PWM_PIN 5
 #define Voltage_meter_PIN A0
@@ -20,6 +20,7 @@ bool activate_L1mode;
 bool mode;
 int16_t tmp[6];
 int16_t last_speed[2];
+int last_angle[2];
 uint16_t count;
 bool last_commend;
 byte error;
@@ -35,7 +36,7 @@ void setup()
     //配對接收器 
     do { 
         //GamePad(clock, command, attention, data, Pressures?, Rumble?)
-        error = ps2x.config_gamepad(13, 11, 10, 12, true, true);   //這行要和接線對應正確
+        error = ps2x.config_gamepad(13, 11, 2, 12, true, true);   //這行要和接線對應正確
         if (error == 0) { Serial.print("Gamepad found!");break; } 
         else { delay(100); } 
     } while (1); 
@@ -50,6 +51,7 @@ void setup()
 
     memset(tmp ,0 ,sizeof(tmp));
     memset(last_speed, 0, sizeof(last_speed));
+    memset(last_angle, 0, sizeof(last_angle));
 }
 void loop()
 {
@@ -57,29 +59,31 @@ void loop()
     
 
     mode = Control_Mode();
-    Read_commend(true);
+    Read_commend(mode);
     Check_Change();
     MotorA_Act();
     MotorB_Act();
-    
+    ServoA_Act();
+    ServoB_Act();
 }
 
 byte Check_Change(){
     /*throttle count*/
     tmp[0] == speedA ? count += 0B0000000001 : count &= 0B1111111100;
-    if(count & 0B0000000011)count &= 0B11111100;
+    //Serial.println("count: " + (String)count + " count&0B0000000011: " + (String)(count & 0B0000000011));
+    if(count & 0B0000000011 == 0B0000000011)count &= 0B1111111100;
     tmp[1] == speedB ? count += 0B0000000100 : count &= 0B1111110011;
-    if(count & 0B0000001100)count &= 0B1111110011;
+    if(count & 0B0000001100 == 0B0000001100)count &= 0B1111110011;
 
     /*mode count*/
     (last_commend == activate_L1mode)? count += 0B0000010000 : count &= 0B1111001111;
-    if(count & 0B0000110000)count &= 0B111111001111;
+    if(count & 0B0000110000 == 0B0000110000)count &= 0B1111001111;
 
     /*direction count*/
     tmp[2] == roll  ?  count += 0B0001000000 : count &= 0B1100111111;
-    if(count & 0B0011000000)count &= 0B1100111111;
+    if(count & 0B0011000000 == 0B0011000000)count &= 0B1100111111;
     tmp[3] == pitch ?  count += 0B0100000000 : count &= 0B0011111111;
-    if(count & 0B1100000000)count &= 0B0011111111;
+    if(count & 0B1100000000 == 0B1100000000)count &= 0B0011111111;
 
     tmp[0] = speedA; 
     tmp[1] = speedB;
@@ -87,6 +91,7 @@ byte Check_Change(){
     tmp[3] = pitch;
     last_commend = activate_L1mode;
 
+    //Serial.println("SpeedA: "+(String)speedA +" tmp0: "+(String)tmp[0]+ " SpeedB: "+(String)speedB+" tmp1: "+(String)tmp[1] + " pitch: "+" tmp3: "+(String)tmp[3] +(String)pitch + " roll: "+(String)roll+" tmp2: "+(String)tmp[2] );
     return count;
 }
 
@@ -138,18 +143,19 @@ bool Control_Mode(){
 void Read_commend(bool mode){
     int L1_value,R1_value;
     activate_L1mode = (ps2x.Button(PSB_L1) == true);
-    if(mode){
+    if(!mode){
         speedA = ps2x.Analog(PSS_LY) - 127;
         speedB = ps2x.Analog(PSS_RY) - 127;
-        L1_value = (int)ps2x.Analog(PSB_L1);
-        R1_value = (int)ps2x.Analog(PSB_R1);
+        L1_value = ps2x.Button(PSB_L1)?256:0;
+        R1_value = ps2x.Button(PSB_R1)?256:0;
         pitch = (R1_value - L1_value)/2;
-        roll = ps2x.Analog(PSS_RX) - 127;
+        roll = ps2x.Analog(PSS_RX) - 128;
     }else{
         speedB = speedA = ps2x.Analog(PSS_LY) - 127;
         pitch = ps2x.Analog(PSS_RY) - 127;
-        roll = ps2x.Analog(PSS_RY) - 127;
+        roll = ps2x.Analog(PSS_RX) - 128;
     }
+    //Serial.println("SpeedA: "+(String)speedA + " SpeedB: "+(String)speedB + " pitch: "+(String)pitch + " roll: "+(String)roll);
 }
 
 void MotorA_Act(){
@@ -163,7 +169,9 @@ void MotorA_Act(){
 
         analogWrite(motorA_PWM_PIN , signalA);
         analogWrite(motorB_PWM_PIN , signalB);
-
+        
+        servoA.write(last_angle[0]);
+        servoB.write(last_angle[1]);
         last_speed[1] = speedB;
 
         //Serial.print((String)"First: "+ (String)" speedA: "+ (String)(last_speed[0] > 0 ? " HIGH " : " LOW ")  + (String)signalA + " SpeedB: " + (String)(speedB > 0 ?  " HIGH " : " LOW ")  +(String)signalB);
@@ -174,13 +182,17 @@ void MotorB_Act(){
     if((count >> 2) > 0b0000010){
         digitalWrite(motorA_DIRC_PIN, speedA > 0 ? HIGH : LOW );
         digitalWrite(motorB_DIRC_PIN, last_speed[1] > 0 ? HIGH : LOW );
-
+        
 
         HandlerToSignal(speedA, &signalA);
         HandlerToSignal(last_speed[1], &signalB);
 
         analogWrite(motorA_PWM_PIN , signalA);
         analogWrite(motorB_PWM_PIN , signalB);
+
+        
+        servoA.write(last_angle[0]);
+        servoB.write(last_angle[1]);
         last_speed[0] = speedA;
 
         //Serial.print((String)"Second: " + (String)" speedA: "+ (String)(speedA > 0 ? " HIGH " : " LOW ")   + (String)signalA + " SpeedB: " + (String)(last_speed[1] > 0?" HIGH " : " LOW ") +(String)signalB);
@@ -189,13 +201,33 @@ void MotorB_Act(){
 }
 void ServoA_Act(){
     if((count >> 6) > 0b0000010){
+        
         signalA = map(roll, -128, 128, 0, 180);
+        Serial.println("roll: " + (String)roll);
+        Serial.println("SignalA: " + (String)signalA);
+
+        
+        digitalWrite(motorA_DIRC_PIN, last_speed[0] > 0 ? HIGH : LOW );
+        digitalWrite(motorB_DIRC_PIN, last_speed[1] > 0 ? HIGH : LOW );
+        analogWrite(motorA_PWM_PIN , last_speed[0]);
+        analogWrite(motorB_PWM_PIN , last_speed[1]);
         servoA.write(signalA);
+        servoB.write(last_angle[1]);
+        last_angle[0] = signalA;
     }
 }
 void ServoB_Act(){
     if((count >> 8) > 0b0000010){
         signalB = map(pitch, -128, 128, 0, 180);
-        servoA.write(signalB);
+        //Serial.println("SignalB: " + (String)signalB);
+
+
+        digitalWrite(motorA_DIRC_PIN, last_speed[0] > 0 ? HIGH : LOW );
+        digitalWrite(motorB_DIRC_PIN, last_speed[1] > 0 ? HIGH : LOW );
+        analogWrite(motorA_PWM_PIN , last_speed[0]);
+        analogWrite(motorB_PWM_PIN , last_speed[1]);
+        servoA.write(last_angle[0]);
+        servoB.write(signalB);
+        last_angle[1] = signalB;
     }
 }

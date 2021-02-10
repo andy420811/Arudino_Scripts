@@ -2,5 +2,6 @@
     "port": "COM5",
     "board": "arduino:megaavr:nona4809",
     "configuration": "mode=off",
-    "sketch": "ps2motor_ctn\\motor.ino"
+    "sketch": "ps2motor_ctn\\motor.ino",
+    "programmer": "Arduino as ISP"
 }

@@ -7,7 +7,7 @@ void setup() {
   //配對接收器 
   do { 
     //GamePad(clock, command, attention, data, Pressures?, Rumble?)
-    error = ps2x.config_gamepad(13, 11, 10, 12, true, true);   //這行要和接線對應正確
+    error = ps2x.config_gamepad(13, 11, 2, 12, true, true);   //這行要和接線對應正確
     if (error == 0) { Serial.print("Gamepad found!");break; } 
     else { delay(100); } 
   } while (1); 
